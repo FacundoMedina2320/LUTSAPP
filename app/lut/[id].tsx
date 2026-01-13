@@ -68,16 +68,28 @@ export default function LutDetail() {
 
   const handleDownload = async () => {
     try {
-      if (!lut?.cube_url) {
+      if (!lut?.id) {
         Alert.alert("Error", "Missing LUT file");
         return;
       }
 
       setBusy(true);
 
+      const { data, error } = await supabase.functions.invoke("download-lut", {
+        body: { lut_id: lut.id },
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      const signedUrl = data?.url as string | undefined;
+      if (!signedUrl) {
+        throw new Error("Signed URL missing");
+      }
+
       const safeName = lut.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-      const baseDirectory =
-        FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+      const baseDirectory = FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
       if (!baseDirectory) {
         Alert.alert("Error", "File storage is unavailable on this device.");
         return;
@@ -86,7 +98,7 @@ export default function LutDetail() {
       const filename = `${safeName || "lut"}.cube`;
       const dest = `${baseDirectory}${filename}`;
 
-      const result = await FileSystem.downloadAsync(lut.cube_url, dest);
+      const result = await FileSystem.downloadAsync(signedUrl, dest);
       if (result.status !== 200) {
         throw new Error("Download failed");
       }
