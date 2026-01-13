@@ -133,8 +133,8 @@ export default function LutDetail() {
 
       {/* Slider */}
       <BeforeAfterSlider
-        beforeUri={lut.before_url || ""}
-        afterUri={lut.after_url || ""}
+        beforeUri={lut.before_url}
+        afterUri={lut.after_url}
         height={420}
         radius={24}
       />

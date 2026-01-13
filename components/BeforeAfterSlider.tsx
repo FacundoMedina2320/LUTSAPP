@@ -9,8 +9,8 @@ export default function BeforeAfterSlider({
   height = 420,
   radius = 24,
 }: {
-  beforeUri: string;
-  afterUri: string;
+  beforeUri?: string | null;
+  afterUri?: string | null;
   height?: number;
   radius?: number;
 }) {
@@ -37,17 +37,26 @@ export default function BeforeAfterSlider({
     transform: [{ translateX: x.value - 16 }],
   }));
 
+  const hasAfter = Boolean(afterUri);
+  const hasBefore = Boolean(beforeUri);
+
   return (
     <View style={[styles.wrap, { height, borderRadius: radius }]} onLayout={onLayout}>
-      {/* AFTER */}
-      <Image source={{ uri: afterUri }} style={[styles.img, { height }]} />
+      {hasAfter ? (
+        <Image source={{ uri: String(afterUri) }} style={[styles.img, { height }]} />
+      ) : (
+        <View style={[styles.placeholder, { height }]}>
+          <View style={styles.placeholderDot} />
+        </View>
+      )}
 
-      {/* BEFORE */}
-      <Animated.View style={[styles.beforeWrap, clipStyle]}>
-        <Image source={{ uri: beforeUri }} style={[styles.img, { height }]} />
-      </Animated.View>
+      {hasBefore && (
+        <Animated.View style={[styles.beforeWrap, clipStyle]}>
+          <Image source={{ uri: String(beforeUri) }} style={[styles.img, { height }]} />
+        </Animated.View>
+      )}
 
-      {width > 0 && (
+      {width > 0 && hasBefore && hasAfter && (
         <GestureDetector gesture={pan}>
           <Animated.View style={[styles.handle, handleStyle]}>
             <View style={styles.line} />
@@ -65,6 +74,18 @@ const styles = StyleSheet.create({
     width: "100%",
     overflow: "hidden",
     backgroundColor: "#f5f5f5",
+  },
+  placeholder: {
+    width: "100%",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#efefef",
+  },
+  placeholderDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "rgba(0,0,0,0.2)",
   },
   img: {
     width: "100%",
