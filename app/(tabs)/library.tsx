@@ -1,0 +1,104 @@
+import { useEffect, useState } from "react";
+import { Alert, FlatList, StyleSheet, Text, View } from "react-native";
+import { router } from "expo-router";
+import { supabase } from "../../lib/supabase";
+import LutCard from "../../components/LutCard";
+
+type LutRow = {
+  id: string;
+  name: string;
+  category: string;
+  premium: boolean;
+  before_url: string | null;
+  after_url: string | null;
+  downloads_count: number | null;
+  rating_avg: number | null;
+};
+
+type LibraryRow = {
+  created_at: string;
+  luts: LutRow | null; // viene del join alias luts:lut_id(...)
+};
+
+export default function Library() {
+  const [loading, setLoading] = useState<boolean>(false);
+  const [items, setItems] = useState<LutRow[]>([]);
+
+  const load = async () => {
+    try {
+      setLoading(true);
+
+      const { data: sessionData } = await supabase.auth.getSession();
+      const userId = sessionData?.session?.user?.id;
+
+      if (!userId) {
+        Alert.alert("Login required", "Please log in to see your library.");
+        router.push("/(auth)/login");
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from("user_library")
+        .select(
+          "created_at, luts:lut_id ( id, name, category, premium, before_url, after_url, downloads_count, rating_avg )"
+        )
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) throw error;
+
+      const rows = ((data as unknown) as LibraryRow[]) || [];
+
+      // mapeo limpio: de [{created_at, luts:{...}}] => [{...lut}]
+      const mapped: LutRow[] = rows
+        .map((r) => r.luts)
+        .filter((x): x is LutRow => !!x);
+
+      setItems(mapped);
+    } catch (e: any) {
+      Alert.alert("Library error", e?.message ?? "Unknown error");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    load();
+  }, []);
+
+  return (
+    <View style={styles.container}>
+      <Text style={styles.h1}>My Library</Text>
+
+      <FlatList
+        data={items}
+        keyExtractor={(x) => x.id}
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        renderItem={({ item }) => (
+          <LutCard
+            lut={{
+              id: item.id,
+              name: item.name,
+              premium: item.premium,
+              beforeUri: item.before_url,
+              afterUri: item.after_url,
+              category: item.category,
+            }}
+            onPress={() => router.push(`/lut/${item.id}`)}
+          />
+        )}
+        refreshing={loading}
+        onRefresh={load}
+        ListEmptyComponent={
+          <Text style={styles.empty}>No downloads yet. Download a LUT to see it here.</Text>
+        }
+      />
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: "#fff" },
+  h1: { fontSize: 28, fontWeight: "800", color: "#111", padding: 16, paddingBottom: 0 },
+  empty: { padding: 16, color: "#666" },
+});

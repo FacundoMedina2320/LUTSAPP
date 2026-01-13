@@ -1,67 +1,122 @@
 import { router, useLocalSearchParams } from "expo-router";
-import { useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import BeforeAfterSlider from "../../components/BeforeAfterSlider";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 
-type Lut = {
+import * as FileSystem from "expo-file-system";
+import * as Sharing from "expo-sharing";
+
+import BeforeAfterSlider from "../../components/BeforeAfterSlider";
+import { supabase } from "../../lib/supabase";
+
+type LutRow = {
   id: string;
   name: string;
+  category: string;
   premium: boolean;
-  beforeUri: string;
-  afterUri: string;
+  before_url: string | null;
+  after_url: string | null;
+  cube_url: string | null;
+  downloads_count: number | null;
 };
 
-const MOCK_LUTS: Lut[] = [
-  {
-    id: "1",
-    name: "Cinematic Gold",
-    premium: true,
-    beforeUri: "https://picsum.photos/800/1200?random=11",
-    afterUri: "https://picsum.photos/800/1200?random=12",
-  },
-  {
-    id: "2",
-    name: "Moody Night",
-    premium: false,
-    beforeUri: "https://picsum.photos/800/1200?random=21",
-    afterUri: "https://picsum.photos/800/1200?random=22",
-  },
-];
-
-function normalizeId(raw: unknown): string | null {
-  if (typeof raw === "string" && raw.trim().length > 0) return raw;
-  if (Array.isArray(raw) && typeof raw[0] === "string" && raw[0].trim().length > 0) return raw[0];
-  return null;
-}
-
 export default function LutDetail() {
-  const params = useLocalSearchParams();
-  const id = normalizeId((params as any).id);
+  const { id } = useLocalSearchParams<{ id: string }>();
+
+  const [lut, setLut] = useState<LutRow | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
 
   const [show, setShow] = useState(false);
+  const [localUri, setLocalUri] = useState<string | null>(null);
 
-  const lut = useMemo(() => {
-    if (!id) return MOCK_LUTS[0];
-    return MOCK_LUTS.find((x) => x.id === id) ?? MOCK_LUTS[0];
+  useEffect(() => {
+    const load = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("luts")
+          .select(
+            "id,name,category,premium,before_url,after_url,cube_url,downloads_count"
+          )
+          .eq("id", id)
+          .single();
+
+        if (error) throw error;
+        setLut(data as LutRow);
+      } catch (e: any) {
+        Alert.alert("Error", e?.message ?? "Failed to load LUT");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (id) load();
   }, [id]);
+
+  const handleDownload = async () => {
+    try {
+      if (!lut?.cube_url) {
+        Alert.alert("Error", "Missing LUT file");
+        return;
+      }
+
+      setBusy(true);
+
+      const safeName = lut.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
+      const dest = `${FileSystem.documentDirectory}${safeName}.cube`;
+
+      const result = await FileSystem.downloadAsync(lut.cube_url, dest);
+      setLocalUri(result.uri);
+
+      setShow(true);
+    } catch (e: any) {
+      Alert.alert("Download error", e?.message ?? "Download failed");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const openInFiles = async () => {
+    if (!localUri) return;
+
+    const available = await Sharing.isAvailableAsync();
+    if (!available) {
+      Alert.alert("Not supported", "Sharing not available on this device");
+      return;
+    }
+
+    await Sharing.shareAsync(localUri);
+  };
+
+  if (loading || !lut) {
+    return (
+      <View style={styles.container}>
+        <Text>Loading…</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
       {/* Header */}
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} hitSlop={10}>
+        <Pressable onPress={() => router.back()}>
           <Text style={styles.back}>Back</Text>
         </Pressable>
-
         <Text style={styles.title}>{lut.name}</Text>
-
-        <View style={{ width: 44 }} />
+        <View style={{ width: 40 }} />
       </View>
 
       {/* Slider */}
       <BeforeAfterSlider
-        beforeUri={lut.beforeUri}
-        afterUri={lut.afterUri}
+        beforeUri={lut.before_url || ""}
+        afterUri={lut.after_url || ""}
         height={420}
         radius={24}
       />
@@ -72,27 +127,28 @@ export default function LutDetail() {
         <Text style={styles.pill}>After</Text>
       </View>
 
-      {/* CTA */}
-      <Pressable style={styles.btn} onPress={() => setShow(true)}>
-        <Text style={styles.btnText}>Download LUT</Text>
+      {/* Download */}
+      <Pressable
+        style={[styles.btn, busy && { opacity: 0.6 }]}
+        onPress={handleDownload}
+        disabled={busy}
+      >
+        <Text style={styles.btnText}>
+          {busy ? "Downloading…" : "Download LUT"}
+        </Text>
       </Pressable>
 
       <Text style={styles.helper}>
-        This LUT will be saved as a .cube file to import into Blackmagic Camera.
+        This LUT will be downloaded as a .cube file for Blackmagic Camera.
       </Text>
 
-      {/* Success Modal */}
-      <Modal
-        visible={show}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShow(false)}
-      >
+      {/* Modal */}
+      <Modal visible={show} transparent animationType="fade">
         <Pressable style={styles.modalBg} onPress={() => setShow(false)}>
           <Pressable style={styles.modal} onPress={() => {}}>
             <Text style={styles.modalTitle}>LUT downloaded successfully</Text>
 
-            <Pressable style={styles.modalBtn} onPress={() => {}}>
+            <Pressable style={styles.modalBtn} onPress={openInFiles}>
               <Text style={styles.modalBtnText}>Open in Files</Text>
             </Pressable>
 
@@ -123,11 +179,11 @@ const styles = StyleSheet.create({
 
   header: {
     flexDirection: "row",
-    alignItems: "center",
     justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: 12,
   },
-  back: { fontSize: 14, color: "#111", fontWeight: "600", width: 44 },
+  back: { fontWeight: "600", color: "#111" },
   title: { fontSize: 18, fontWeight: "600", color: "#111" },
 
   labelsRow: {
@@ -144,7 +200,6 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
     borderColor: "rgba(0,0,0,0.08)",
-    backgroundColor: "rgba(255,255,255,0.9)",
   },
 
   btn: {
@@ -152,11 +207,10 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     borderRadius: 16,
     alignItems: "center",
-    marginTop: 4,
   },
   btnText: { color: "#fff", fontWeight: "600", fontSize: 16 },
 
-  helper: { fontSize: 12, color: "#666", marginTop: 10, lineHeight: 16 },
+  helper: { fontSize: 12, color: "#666", marginTop: 10 },
 
   modalBg: {
     flex: 1,
@@ -169,7 +223,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     padding: 16,
   },
-  modalTitle: { fontSize: 16, fontWeight: "600", marginBottom: 12, color: "#111" },
+  modalTitle: { fontSize: 16, fontWeight: "600", marginBottom: 12 },
 
   modalBtn: {
     backgroundColor: "#111",
@@ -178,7 +232,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     alignItems: "center",
   },
-  modalBtnText: { color: "#fff", fontWeight: "600", fontSize: 14 },
+  modalBtnText: { color: "#fff", fontWeight: "600" },
 
   modalBtnSecondary: {
     backgroundColor: "#f5f5f5",
@@ -186,11 +240,9 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     marginTop: 10,
     alignItems: "center",
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.08)",
   },
-  modalBtnTextSecondary: { color: "#111", fontWeight: "600", fontSize: 14 },
+  modalBtnTextSecondary: { color: "#111", fontWeight: "600" },
 
-  closeBtn: { alignItems: "center", marginTop: 12, paddingVertical: 6 },
-  close: { color: "#111", fontWeight: "600" },
+  closeBtn: { alignItems: "center", marginTop: 12 },
+  close: { fontWeight: "600" },
 });
