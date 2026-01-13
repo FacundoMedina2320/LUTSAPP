@@ -27,7 +27,8 @@ type LutRow = {
 };
 
 export default function LutDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id } = useLocalSearchParams<{ id?: string | string[] }>();
+  const lutId = Array.isArray(id) ? id[0] : id;
 
   const [lut, setLut] = useState<LutRow | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,6 +38,12 @@ export default function LutDetail() {
   const [localUri, setLocalUri] = useState<string | null>(null);
 
   useEffect(() => {
+    if (!lutId) {
+      setLoading(false);
+      Alert.alert("Error", "Missing LUT identifier.");
+      return;
+    }
+
     const load = async () => {
       try {
         const { data, error } = await supabase
@@ -44,7 +51,7 @@ export default function LutDetail() {
           .select(
             "id,name,category,premium,before_url,after_url,cube_url,downloads_count"
           )
-          .eq("id", id)
+          .eq("id", lutId)
           .single();
 
         if (error) throw error;
@@ -56,8 +63,8 @@ export default function LutDetail() {
       }
     };
 
-    if (id) load();
-  }, [id]);
+    load();
+  }, [lutId]);
 
   const handleDownload = async () => {
     try {
@@ -69,9 +76,20 @@ export default function LutDetail() {
       setBusy(true);
 
       const safeName = lut.name.replace(/[^a-z0-9]+/gi, "_").toLowerCase();
-      const dest = `${FileSystem.documentDirectory}${safeName}.cube`;
+      const baseDirectory =
+        FileSystem.documentDirectory ?? FileSystem.cacheDirectory;
+      if (!baseDirectory) {
+        Alert.alert("Error", "File storage is unavailable on this device.");
+        return;
+      }
+
+      const filename = `${safeName || "lut"}.cube`;
+      const dest = `${baseDirectory}${filename}`;
 
       const result = await FileSystem.downloadAsync(lut.cube_url, dest);
+      if (result.status !== 200) {
+        throw new Error("Download failed");
+      }
       setLocalUri(result.uri);
 
       setShow(true);
