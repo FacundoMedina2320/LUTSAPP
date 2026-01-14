@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -221,13 +222,20 @@ export default function Login() {
         )}
 
         <Pressable
-          style={[styles.primaryBtn, busy && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.primaryBtn,
+            pressed && styles.btnPressed,
+            busy && { opacity: 0.6 },
+          ]}
           onPress={onEmailAuth}
           disabled={busy}
         >
-          <Text style={styles.primaryBtnText}>
-            {mode === "login" ? "Log in" : "Create account"}
-          </Text>
+          <View style={styles.btnRow}>
+            {busy ? <ActivityIndicator size="small" color="#fff" /> : null}
+            <Text style={styles.primaryBtnText}>
+              {mode === "login" ? "Log in" : "Create account"}
+            </Text>
+          </View>
         </Pressable>
 
         <Pressable style={styles.linkRow} onPress={() => Alert.alert("Recuperación", "Pronto podrás restablecer tu contraseña.")}>
@@ -243,21 +251,30 @@ export default function Login() {
 
       <View style={styles.oauthRow}>
         <Pressable
-          style={[styles.oauthBtn, busy && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.oauthBtn,
+            pressed && styles.btnPressed,
+            busy && { opacity: 0.6 },
+          ]}
           onPress={() => signInWithProvider("google")}
           disabled={busy}
         >
           <Ionicons name="logo-google" size={18} color="#111" />
-          <Text style={styles.oauthBtnText}>Google</Text>
+          <Text style={styles.oauthBtnText}>{busy ? "Connecting..." : "Google"}</Text>
         </Pressable>
 
         <Pressable
-          style={[styles.oauthBtn, styles.appleBtn, busy && { opacity: 0.6 }]}
+          style={({ pressed }) => [
+            styles.oauthBtn,
+            styles.appleBtn,
+            pressed && styles.btnPressed,
+            busy && { opacity: 0.6 },
+          ]}
           onPress={() => signInWithProvider("apple")}
           disabled={busy}
         >
           <Ionicons name="logo-apple" size={18} color="#fff" />
-          <Text style={styles.appleBtnText}>Apple</Text>
+          <Text style={styles.appleBtnText}>{busy ? "Connecting..." : "Apple"}</Text>
         </Pressable>
       </View>
 
@@ -377,6 +394,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 4,
   },
+  btnPressed: { transform: [{ scale: 0.98 }] },
+  btnRow: { flexDirection: "row", alignItems: "center", gap: 8 },
   primaryBtnText: { color: "#fff", fontWeight: "700", fontSize: 16 },
   linkRow: { alignItems: "center", marginTop: 10 },
   linkText: { fontWeight: "600", color: "#111" },

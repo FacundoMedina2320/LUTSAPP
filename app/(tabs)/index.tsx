@@ -1,5 +1,15 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useMemo, useState } from "react";
-import { FlatList, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import {
+  ActivityIndicator,
+  FlatList,
+  Pressable,
+  StyleSheet,
+  Text,
+  TextInput,
+  useWindowDimensions,
+  View,
+} from "react-native";
 import { router } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import LutCard from "../../components/LutCard";
@@ -42,6 +52,7 @@ const CATEGORIES = [
 
 export default function Home() {
   const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
   const [sort, setSort] = useState<"downloads" | "rating">("downloads");
   const [category, setCategory] = useState<string>("All");
@@ -51,6 +62,11 @@ export default function Home() {
   const [showSug, setShowSug] = useState<boolean>(false);
 
   const [luts, setLuts] = useState<LutRow[]>([]);
+
+  const { width } = useWindowDimensions();
+  const numColumns = width >= 720 ? 3 : width >= 520 ? 2 : 1;
+  const cardGap = 14;
+  const sidePadding = 16;
 
   const orderBy = useMemo(() => {
     return sort === "rating"
@@ -67,6 +83,7 @@ export default function Home() {
     const load = async () => {
       try {
         setLoading(true);
+        setError(null);
 
         let q = supabase
           .from("luts")
@@ -82,7 +99,7 @@ export default function Home() {
 
         if (!cancelled) setLuts((data as LutRow[]) || []);
       } catch (e: any) {
-        console.log("Home load error:", e?.message ?? e);
+        setError(e?.message ?? "No se pudo cargar el marketplace.");
       } finally {
         setLoading(false);
       }
@@ -134,44 +151,62 @@ export default function Home() {
 
   const header = (
     <View style={styles.headerWrap}>
-      <Text style={styles.h1}>LUTs</Text>
+      <View style={styles.titleRow}>
+        <View>
+          <Text style={styles.h1}>Marketplace</Text>
+          <Text style={styles.subhead}>Encuentra LUTs cinematográficos y listos para producción.</Text>
+        </View>
+        <Pressable style={styles.searchCta} onPress={() => setShowSug(true)}>
+          <Ionicons name="sparkles-outline" size={18} color="#111827" />
+        </Pressable>
+      </View>
 
       {/* Search */}
       <View style={styles.searchWrap}>
-        <TextInput
-          value={query}
-          onChangeText={(v) => {
-            setQuery(v);
-            setShowSug(true);
-          }}
-          placeholder="Search LUTs by name…"
-          placeholderTextColor="#999"
-          style={styles.search}
-          autoCapitalize="none"
-        />
+        <View style={styles.searchInputRow}>
+          <Ionicons name="search-outline" size={18} color="#94a3b8" />
+          <TextInput
+            value={query}
+            onChangeText={(v) => {
+              setQuery(v);
+              setShowSug(true);
+            }}
+            placeholder="Buscar LUTs por nombre"
+            placeholderTextColor="#94a3b8"
+            style={styles.search}
+            autoCapitalize="none"
+          />
+        </View>
 
         {/* Suggestions */}
-        {showSug && suggestions.length > 0 && (
+        {showSug && (suggestions.length > 0 || query.trim().length >= 2) && (
           <View style={styles.sugBox}>
-            {suggestions.map((s) => (
-              <Pressable
-                key={s.id}
-                onPress={() => {
-                  setShowSug(false);
-                  setQuery("");
-                  onOpenLut(s.id);
-                }}
-                style={styles.sugRow}
-              >
-                <Text style={styles.sugName} numberOfLines={1}>
-                  {s.name}
-                </Text>
-                <Text style={styles.sugMeta}>
-                  {s.category}
-                  {s.premium ? " • Premium" : ""}
-                </Text>
-              </Pressable>
-            ))}
+            {suggestions.length > 0 ? (
+              suggestions.map((s) => (
+                <Pressable
+                  key={s.id}
+                  onPress={() => {
+                    setShowSug(false);
+                    setQuery("");
+                    onOpenLut(s.id);
+                  }}
+                  style={({ pressed }) => [styles.sugRow, pressed && styles.sugRowPressed]}
+                >
+                  <Text style={styles.sugName} numberOfLines={1}>
+                    {s.name}
+                  </Text>
+                  <Text style={styles.sugMeta}>
+                    {s.category}
+                    {s.premium ? " • Premium" : ""}
+                  </Text>
+                </Pressable>
+              ))
+            ) : (
+              <View style={styles.sugEmpty}>
+                <Text style={styles.sugEmptyTitle}>Sin resultados</Text>
+                <Text style={styles.sugEmptyText}>Probá con otro nombre o categoría.</Text>
+              </View>
+            )}
           </View>
         )}
       </View>
@@ -179,7 +214,11 @@ export default function Home() {
       {/* Sort */}
       <View style={styles.sortRow}>
         <Pressable
-          style={[styles.sortPill, sort === "downloads" && styles.sortPillActive]}
+          style={({ pressed }) => [
+            styles.sortPill,
+            sort === "downloads" && styles.sortPillActive,
+            pressed && styles.pressedScale,
+          ]}
           onPress={() => setSort("downloads")}
         >
           <Text style={[styles.sortText, sort === "downloads" && styles.sortTextActive]}>
@@ -188,7 +227,11 @@ export default function Home() {
         </Pressable>
 
         <Pressable
-          style={[styles.sortPill, sort === "rating" && styles.sortPillActive]}
+          style={({ pressed }) => [
+            styles.sortPill,
+            sort === "rating" && styles.sortPillActive,
+            pressed && styles.pressedScale,
+          ]}
           onPress={() => setSort("rating")}
         >
           <Text style={[styles.sortText, sort === "rating" && styles.sortTextActive]}>
@@ -207,14 +250,47 @@ export default function Home() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => setCategory(item)}
-            style={[styles.catPill, category === item && styles.catPillActive]}
+            style={({ pressed }) => [
+              styles.catPill,
+              category === item && styles.catPillActive,
+              pressed && styles.pressedScale,
+            ]}
           >
             <Text style={[styles.catText, category === item && styles.catTextActive]}>{item}</Text>
           </Pressable>
         )}
       />
 
-      <Text style={styles.sectionTitle}>{sort === "downloads" ? "Most downloaded" : "Top rated"}</Text>
+      <View style={styles.sectionRow}>
+        <Text style={styles.sectionTitle}>
+          {sort === "downloads" ? "Most downloaded" : "Top rated"}
+        </Text>
+        <View style={styles.sectionMeta}>
+          {loading ? (
+            <ActivityIndicator size="small" color="#111827" />
+          ) : (
+            <Text style={styles.sectionCount}>{luts.length} LUTs</Text>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+
+  const emptyState = (
+    <View style={styles.emptyWrap}>
+      {error ? (
+        <>
+          <Ionicons name="alert-circle-outline" size={26} color="#ef4444" />
+          <Text style={styles.emptyTitle}>No se pudo cargar</Text>
+          <Text style={styles.emptyText}>{error}</Text>
+        </>
+      ) : (
+        <>
+          <Ionicons name="images-outline" size={26} color="#94a3b8" />
+          <Text style={styles.emptyTitle}>Sin resultados</Text>
+          <Text style={styles.emptyText}>Intentá con otra categoría o filtro.</Text>
+        </>
+      )}
     </View>
   );
 
@@ -224,7 +300,14 @@ export default function Home() {
         data={luts}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={header}
-        contentContainerStyle={{ paddingBottom: 24 }}
+        contentContainerStyle={{
+          paddingBottom: 40,
+          paddingHorizontal: sidePadding,
+          gap: cardGap,
+        }}
+        key={numColumns}
+        numColumns={numColumns}
+        columnWrapperStyle={numColumns > 1 ? { gap: cardGap } : undefined}
         renderItem={({ item }) => (
           <LutCard
             lut={{
@@ -236,6 +319,7 @@ export default function Home() {
               category: item.category,
             }}
             onPress={() => onOpenLut(item.id)}
+            containerStyle={numColumns > 1 ? styles.cardColumn : undefined}
           />
         )}
         refreshing={loading}
@@ -244,61 +328,91 @@ export default function Home() {
           setSort((s) => (s === "downloads" ? "rating" : "downloads"));
           setTimeout(() => setSort((s) => (s === "downloads" ? "rating" : "downloads")), 0);
         }}
+        ListEmptyComponent={!loading ? emptyState : null}
       />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff" },
+  container: { flex: 1, backgroundColor: "#f6f7fb" },
 
-  headerWrap: { padding: 16, paddingTop: 10 },
-  h1: { fontSize: 28, fontWeight: "800", color: "#111", marginBottom: 10 },
-
-  searchWrap: { position: "relative" },
-  search: {
-    borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)",
-    borderRadius: 16,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 14,
-    color: "#111",
+  headerWrap: { paddingTop: 10, paddingBottom: 6 },
+  titleRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  h1: { fontSize: 28, fontWeight: "800", color: "#0f172a" },
+  subhead: { marginTop: 4, fontSize: 13, color: "#64748b", maxWidth: 240 },
+  searchCta: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
     backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  searchWrap: { position: "relative", marginTop: 16 },
+  searchInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 14,
+    color: "#0f172a",
+    backgroundColor: "#fff",
+  },
+  search: {
+    flex: 1,
+    fontSize: 14,
+    color: "#0f172a",
   },
 
   sugBox: {
     position: "absolute",
     left: 0,
     right: 0,
-    top: 52,
+    top: 56,
     backgroundColor: "#fff",
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)",
-    borderRadius: 16,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    borderRadius: 18,
     overflow: "hidden",
     zIndex: 20,
+    shadowColor: "#0f172a",
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
   },
   sugRow: {
     paddingVertical: 10,
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.06)",
+    borderTopColor: "rgba(15, 23, 42, 0.05)",
   },
-  sugName: { fontWeight: "700", color: "#111" },
-  sugMeta: { marginTop: 2, fontSize: 12, color: "#666" },
+  sugRowPressed: { backgroundColor: "rgba(15, 23, 42, 0.04)" },
+  sugName: { fontWeight: "700", color: "#0f172a" },
+  sugMeta: { marginTop: 2, fontSize: 12, color: "#64748b" },
+  sugEmpty: { padding: 14 },
+  sugEmptyTitle: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  sugEmptyText: { marginTop: 4, fontSize: 12, color: "#64748b" },
 
-  sortRow: { flexDirection: "row", gap: 10, marginTop: 12 },
+  sortRow: { flexDirection: "row", gap: 10, marginTop: 14 },
   sortPill: {
     paddingVertical: 10,
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)",
+    borderColor: "rgba(15, 23, 42, 0.10)",
     backgroundColor: "#fff",
   },
-  sortPillActive: { backgroundColor: "#111", borderColor: "#111" },
-  sortText: { fontWeight: "800", color: "#111", fontSize: 12 },
+  sortPillActive: { backgroundColor: "#111827", borderColor: "#111827" },
+  sortText: { fontWeight: "700", color: "#0f172a", fontSize: 12 },
   sortTextActive: { color: "#fff" },
 
   catPill: {
@@ -306,12 +420,30 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "rgba(0,0,0,0.10)",
+    borderColor: "rgba(15, 23, 42, 0.10)",
     backgroundColor: "#fff",
   },
-  catPillActive: { backgroundColor: "#111", borderColor: "#111" },
-  catText: { fontWeight: "800", color: "#111", fontSize: 12 },
+  catPillActive: { backgroundColor: "#111827", borderColor: "#111827" },
+  catText: { fontWeight: "700", color: "#0f172a", fontSize: 12 },
   catTextActive: { color: "#fff" },
 
-  sectionTitle: { marginTop: 4, fontSize: 14, fontWeight: "800", color: "#111" },
+  sectionRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  sectionTitle: { marginTop: 4, fontSize: 14, fontWeight: "800", color: "#0f172a" },
+  sectionMeta: { marginTop: 4 },
+  sectionCount: { fontSize: 12, fontWeight: "700", color: "#64748b" },
+
+  pressedScale: { transform: [{ scale: 0.98 }] },
+  cardColumn: { flex: 1 },
+
+  emptyWrap: {
+    marginTop: 24,
+    alignItems: "center",
+    padding: 24,
+    backgroundColor: "#fff",
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+  },
+  emptyTitle: { marginTop: 8, fontSize: 15, fontWeight: "700", color: "#0f172a" },
+  emptyText: { marginTop: 4, fontSize: 12, color: "#64748b", textAlign: "center" },
 });
