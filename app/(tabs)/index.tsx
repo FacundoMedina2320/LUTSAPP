@@ -25,6 +25,16 @@ type LutRow = {
   created_at?: string | null;
 };
 
+type LutRowFallback = {
+  id: string;
+  name: string;
+  is_premium: boolean;
+  before_url: string | null;
+  after_url: string | null;
+  downloads_count: number | null;
+  created_at?: string | null;
+};
+
 type SuggestionRow = {
   id: string;
   name: string;
@@ -85,7 +95,33 @@ export default function Home() {
 
         if (error) throw error;
 
-        if (!cancelled) setLuts((data as LutRow[]) || []);
+        const rows = (data as LutRow[]) || [];
+
+        if (!cancelled && rows.length > 0) {
+          setLuts(rows);
+          return;
+        }
+
+        if (!cancelled && !category) {
+          const { data: fallbackData, error: fallbackError } = await supabase
+            .from("luts")
+            .select("id,name,is_premium,before_url,after_url,downloads_count,created_at")
+            .order(orderBy.col, { ascending: orderBy.asc })
+            .limit(30);
+
+          if (fallbackError) throw fallbackError;
+
+          const fallbackRows = (fallbackData as LutRowFallback[]) || [];
+          setLuts(
+            fallbackRows.map((row) => ({
+              ...row,
+              category: null,
+            }))
+          );
+          return;
+        }
+
+        if (!cancelled) setLuts(rows);
       } catch (e: any) {
         setError(e?.message ?? "No se pudo cargar el marketplace.");
       } finally {
