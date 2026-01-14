@@ -21,11 +21,11 @@ import { supabase } from "../../lib/supabase";
 type LutRow = {
   id: string;
   name: string;
-  category: string;
-  premium: boolean;
+  category: { name: string } | null;
+  is_premium: boolean;
   before_url: string | null;
   after_url: string | null;
-  cube_url: string | null;
+  cube_path: string | null;
   downloads_count: number | null;
 };
 
@@ -52,7 +52,7 @@ export default function LutDetail() {
         const { data, error } = await supabase
           .from("luts")
           .select(
-            "id,name,category,premium,before_url,after_url,cube_url,downloads_count"
+            "id,name,is_premium,before_url,after_url,cube_path,downloads_count,category:categories(name)"
           )
           .eq("id", lutId)
           .single();
@@ -73,6 +73,10 @@ export default function LutDetail() {
     try {
       if (!lut?.id) {
         Alert.alert("Error", "Missing LUT file");
+        return;
+      }
+      if (!lut.cube_path) {
+        Alert.alert("No disponible", "Este LUT aún no tiene archivo descargable.");
         return;
       }
 
@@ -164,13 +168,13 @@ export default function LutDetail() {
       <View style={styles.metaRow}>
         <View style={styles.metaPill}>
           <Ionicons name="pricetag-outline" size={14} color="#0f172a" />
-          <Text style={styles.metaText}>{lut.category}</Text>
+          <Text style={styles.metaText}>{lut.category?.name ?? "Sin categoría"}</Text>
         </View>
         <View style={styles.metaPill}>
           <Ionicons name="download-outline" size={14} color="#0f172a" />
           <Text style={styles.metaText}>{lut.downloads_count ?? 0} descargas</Text>
         </View>
-        {lut.premium && (
+        {lut.is_premium && (
           <View style={styles.metaPillDark}>
             <Ionicons name="sparkles-outline" size={14} color="#fff" />
             <Text style={styles.metaTextDark}>Premium</Text>

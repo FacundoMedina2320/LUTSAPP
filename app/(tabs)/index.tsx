@@ -17,45 +17,33 @@ import LutCard from "../../components/LutCard";
 type LutRow = {
   id: string;
   name: string;
-  category: string;
-  premium: boolean;
+  category: { name: string } | null;
+  is_premium: boolean;
   before_url: string | null;
   after_url: string | null;
   downloads_count: number | null;
-  rating_avg: number | null;
+  created_at?: string | null;
 };
 
 type SuggestionRow = {
   id: string;
   name: string;
-  category: string;
-  premium: boolean;
+  category: { name: string } | null;
+  is_premium: boolean;
 };
 
-const CATEGORIES = [
-  "All",
-  "Cinematic",
-  "Teal & Orange",
-  "Moody",
-  "Film / Vintage",
-  "Clean / Natural",
-  "Portrait / Skin tones",
-  "Landscape",
-  "Night",
-  "Warm",
-  "Cool",
-  "B&W",
-  "HDR / Punchy",
-  "Wedding",
-  "Travel",
-];
+type CategoryRow = {
+  id: string;
+  name: string;
+};
 
 export default function Home() {
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [sort, setSort] = useState<"downloads" | "rating">("downloads");
-  const [category, setCategory] = useState<string>("All");
+  const [sort, setSort] = useState<"downloads" | "newest">("downloads");
+  const [category, setCategory] = useState<CategoryRow | null>(null);
+  const [categories, setCategories] = useState<CategoryRow[]>([]);
 
   const [query, setQuery] = useState<string>("");
   const [suggestions, setSuggestions] = useState<SuggestionRow[]>([]);
@@ -69,8 +57,8 @@ export default function Home() {
   const sidePadding = 16;
 
   const orderBy = useMemo(() => {
-    return sort === "rating"
-      ? { col: "rating_avg" as const, asc: false }
+    return sort === "newest"
+      ? { col: "created_at" as const, asc: false }
       : { col: "downloads_count" as const, asc: false };
   }, [sort]);
 
@@ -87,11 +75,11 @@ export default function Home() {
 
         let q = supabase
           .from("luts")
-          .select("id,name,category,premium,before_url,after_url,downloads_count,rating_avg")
+          .select("id,name,is_premium,before_url,after_url,downloads_count,created_at,category:categories(name)")
           .order(orderBy.col, { ascending: orderBy.asc })
           .limit(30);
 
-        if (category !== "All") q = q.eq("category", category);
+        if (category?.id) q = q.eq("category_id", category.id);
 
         const { data, error } = await q;
 
@@ -111,6 +99,29 @@ export default function Home() {
     };
   }, [category, orderBy]);
 
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCategories = async () => {
+      try {
+        const { data, error } = await supabase
+          .from("categories")
+          .select("id,name")
+          .order("name", { ascending: true });
+
+        if (error) throw error;
+        if (!cancelled) setCategories((data as CategoryRow[]) || []);
+      } catch (e: any) {
+        console.log("Categories error:", e?.message ?? e);
+      }
+    };
+
+    loadCategories();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Suggestions while typing (debounced)
   useEffect(() => {
     let timer: any = null;
@@ -126,12 +137,12 @@ export default function Home() {
       try {
         let q = supabase
           .from("luts")
-          .select("id,name,category,premium")
+          .select("id,name,is_premium,category:categories(name)")
           .ilike("name", `%${text}%`)
           .order("downloads_count", { ascending: false })
           .limit(6);
 
-        if (category !== "All") q = q.eq("category", category);
+        if (category?.id) q = q.eq("category_id", category.id);
 
         const { data, error } = await q;
         if (error) throw error;
@@ -196,8 +207,8 @@ export default function Home() {
                     {s.name}
                   </Text>
                   <Text style={styles.sugMeta}>
-                    {s.category}
-                    {s.premium ? " • Premium" : ""}
+                    {s.category?.name ?? "Sin categoría"}
+                    {s.is_premium ? " • Premium" : ""}
                   </Text>
                 </Pressable>
               ))
@@ -222,48 +233,59 @@ export default function Home() {
           onPress={() => setSort("downloads")}
         >
           <Text style={[styles.sortText, sort === "downloads" && styles.sortTextActive]}>
-            Most downloaded
+            Más descargadas
           </Text>
         </Pressable>
 
         <Pressable
           style={({ pressed }) => [
             styles.sortPill,
-            sort === "rating" && styles.sortPillActive,
+            sort === "newest" && styles.sortPillActive,
             pressed && styles.pressedScale,
           ]}
-          onPress={() => setSort("rating")}
+          onPress={() => setSort("newest")}
         >
-          <Text style={[styles.sortText, sort === "rating" && styles.sortTextActive]}>
-            Top rated
+          <Text style={[styles.sortText, sort === "newest" && styles.sortTextActive]}>
+            Novedades
           </Text>
         </Pressable>
       </View>
 
       {/* Categories */}
       <FlatList
-        data={CATEGORIES}
+        data={[{ id: "all", name: "All" }, ...categories]}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(x) => x}
+        keyExtractor={(x) => x.id}
         contentContainerStyle={{ gap: 8, paddingVertical: 10 }}
         renderItem={({ item }) => (
           <Pressable
-            onPress={() => setCategory(item)}
+            onPress={() => setCategory(item.id === "all" ? null : item)}
             style={({ pressed }) => [
               styles.catPill,
-              category === item && styles.catPillActive,
+              category?.id === item.id || (!category && item.id === "all")
+                ? styles.catPillActive
+                : null,
               pressed && styles.pressedScale,
             ]}
           >
-            <Text style={[styles.catText, category === item && styles.catTextActive]}>{item}</Text>
+            <Text
+              style={[
+                styles.catText,
+                category?.id === item.id || (!category && item.id === "all")
+                  ? styles.catTextActive
+                  : null,
+              ]}
+            >
+              {item.name}
+            </Text>
           </Pressable>
         )}
       />
 
       <View style={styles.sectionRow}>
         <Text style={styles.sectionTitle}>
-          {sort === "downloads" ? "Most downloaded" : "Top rated"}
+          {sort === "downloads" ? "Más descargadas" : "Nuevas en catálogo"}
         </Text>
         <View style={styles.sectionMeta}>
           {loading ? (
@@ -313,10 +335,10 @@ export default function Home() {
             lut={{
               id: item.id,
               name: item.name,
-              premium: item.premium,
+              premium: item.is_premium,
               beforeUri: item.before_url,
               afterUri: item.after_url,
-              category: item.category,
+              category: item.category?.name ?? "Sin categoría",
             }}
             onPress={() => onOpenLut(item.id)}
             containerStyle={numColumns > 1 ? styles.cardColumn : undefined}
@@ -325,8 +347,8 @@ export default function Home() {
         refreshing={loading}
         onRefresh={() => {
           // refresh simple
-          setSort((s) => (s === "downloads" ? "rating" : "downloads"));
-          setTimeout(() => setSort((s) => (s === "downloads" ? "rating" : "downloads")), 0);
+          setSort((s) => (s === "downloads" ? "newest" : "downloads"));
+          setTimeout(() => setSort((s) => (s === "downloads" ? "newest" : "downloads")), 0);
         }}
         ListEmptyComponent={!loading ? emptyState : null}
       />
