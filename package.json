@@ -8,7 +8,8 @@
     "android": "expo start --android",
     "ios": "expo start --ios",
     "web": "expo start --web",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "bulk-import-luts": "node scripts/bulk-import-luts.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
@@ -19,6 +20,7 @@
     "expo": "~54.0.31",
     "expo-auth-session": "~7.0.10",
     "expo-constants": "~18.0.13",
+    "expo-document-picker": "^14.0.8",
     "expo-file-system": "~19.0.21",
     "expo-font": "~14.0.10",
     "expo-haptics": "~15.0.8",
