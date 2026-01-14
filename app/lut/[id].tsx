@@ -140,6 +140,9 @@ export default function LutDetail() {
     );
   }
 
+  const hasBefore = Boolean(lut.before_url);
+  const hasAfter = Boolean(lut.after_url);
+
   return (
     <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
       {/* Header */}
@@ -160,10 +163,22 @@ export default function LutDetail() {
       />
 
       {/* Labels */}
-      <View style={styles.labelsRow}>
-        <Text style={styles.pill}>Before</Text>
-        <Text style={styles.pill}>After</Text>
-      </View>
+      {(hasBefore || hasAfter) && (
+        <View style={styles.labelsRow}>
+          {hasBefore && <Text style={styles.pill}>Before</Text>}
+          {hasAfter && <Text style={styles.pill}>After</Text>}
+        </View>
+      )}
+
+      {!hasBefore && !hasAfter && (
+        <View style={styles.previewEmpty}>
+          <Ionicons name="image-outline" size={18} color="#64748b" />
+          <View style={styles.previewTextWrap}>
+            <Text style={styles.previewTitle}>Preview en preparación</Text>
+            <Text style={styles.previewText}>Este LUT todavía no tiene imágenes de antes/después.</Text>
+          </View>
+        </View>
+      )}
 
       <View style={styles.metaRow}>
         <View style={styles.metaPill}>
@@ -295,6 +310,20 @@ const styles = StyleSheet.create({
     borderColor: "rgba(15, 23, 42, 0.08)",
     backgroundColor: "#fff",
   },
+  previewEmpty: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    padding: 12,
+    borderRadius: 16,
+    backgroundColor: "#fff",
+    borderWidth: 1,
+    borderColor: "rgba(15, 23, 42, 0.08)",
+    marginBottom: 12,
+  },
+  previewTextWrap: { flex: 1 },
+  previewTitle: { fontSize: 13, fontWeight: "700", color: "#0f172a" },
+  previewText: { marginTop: 4, fontSize: 12, color: "#64748b" },
 
   metaRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 16 },
   metaPill: {
